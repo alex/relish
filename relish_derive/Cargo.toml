@@ -1,0 +1,16 @@
+[package]
+name = "relish_derive"
+version = "0.1.0"
+authors = ["Alex Gaynor <alex.gaynor@gmail.com>"]
+license = "BSD-3-Clause"
+
+edition = "2024"
+rust-version = "1.91.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "2.0.110"
+quote = "1.0.42"
+proc-macro2 = "1.0.103"
