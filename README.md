@@ -100,11 +100,11 @@ let parsed: Person = relish::parse(bytes.into()).unwrap();
 ```rust
 #[derive(relish::Relish)]
 enum Status {
-    #[relish(variant_id = 0)]
-    Active,
-    #[relish(variant_id = 1)]
+    #[relish(field_id = 0)]
+    Active(()),
+    #[relish(field_id = 1)]
     Inactive(String),
-    #[relish(variant_id = 2)]
+    #[relish(field_id = 2)]
     Pending(u32),
 }
 ```
