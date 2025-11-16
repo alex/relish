@@ -246,6 +246,10 @@ impl<T: Relish> Relish for Vec<T> {
         let elem_type = TypeId::read_for_type::<T>(data)?;
 
         let mut elements = Vec::new();
+        if let TypeLength::Fixed(size) = elem_type.length() {
+            elements.reserve(data.len() / size);
+        }
+
         while !data.is_empty() {
             elements.push(parse_value_for_typeid::<T>(data, elem_type)?);
         }
