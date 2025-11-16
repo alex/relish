@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, Meta, parse_macro_input};
+use syn::{Data, DeriveInput, Fields, LitInt, parse_macro_input};
 
 #[proc_macro_derive(Relish, attributes(relish))]
 pub fn derive_relish(input: TokenStream) -> TokenStream {
@@ -49,21 +49,19 @@ fn impl_relish_struct(
         let mut skip = false;
 
         for attr in &field.attrs {
-            if attr.path().is_ident("relish")
-                && let Meta::List(meta_list) = &attr.meta
-            {
-                let tokens = &meta_list.tokens;
-                let tokens_str = tokens.to_string();
-
-                if let Some(id_str) = tokens_str.strip_prefix("field_id =") {
-                    let id_str = id_str.trim();
-                    let id: u8 = id_str.parse().map_err(|_| {
-                        syn::Error::new_spanned(attr, "field_id must be a valid u8")
-                    })?;
-                    field_id = Some(id);
-                } else if tokens_str == "skip" {
-                    skip = true;
-                }
+            if attr.path().is_ident("relish") {
+                attr.parse_nested_meta(|meta| {
+                    if meta.path.is_ident("field_id") {
+                        let value: LitInt = meta.value()?.parse()?;
+                        let id: u8 = value.base10_parse()?;
+                        field_id = Some(id);
+                    } else if meta.path.is_ident("skip") {
+                        skip = true;
+                    } else {
+                        return Err(meta.error("unsupported relish attribute"));
+                    }
+                    Ok(())
+                })?;
             }
         }
 
@@ -186,19 +184,17 @@ fn impl_relish_enum(
         let mut field_id = None;
 
         for attr in &variant.attrs {
-            if attr.path().is_ident("relish")
-                && let Meta::List(meta_list) = &attr.meta
-            {
-                let tokens = &meta_list.tokens;
-                let tokens_str = tokens.to_string();
-
-                if let Some(id_str) = tokens_str.strip_prefix("field_id =") {
-                    let id_str = id_str.trim();
-                    let id: u8 = id_str.parse().map_err(|_| {
-                        syn::Error::new_spanned(attr, "field_id must be a valid u8")
-                    })?;
-                    field_id = Some(id);
-                }
+            if attr.path().is_ident("relish") {
+                attr.parse_nested_meta(|meta| {
+                    if meta.path.is_ident("field_id") {
+                        let value: LitInt = meta.value()?.parse()?;
+                        let id: u8 = value.base10_parse()?;
+                        field_id = Some(id);
+                    } else {
+                        return Err(meta.error("unsupported relish attribute"));
+                    }
+                    Ok(())
+                })?;
             }
         }
 
