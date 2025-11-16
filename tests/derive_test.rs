@@ -278,3 +278,29 @@ fn test_nested_enums() {
         ),
     ]);
 }
+
+#[test]
+fn test_enum_with_extra_data() {
+    #[derive(Debug, PartialEq, Relish)]
+    enum SimpleEnum {
+        #[relish(field_id = 0)]
+        A(u32),
+    }
+
+    // Valid enum with extra byte after the u32 value
+    // 0x12 = Enum type ID
+    // 0x0E = Length (7 bytes instead of 6: field_id + type + u32 + extra)
+    // 0x00 = field ID
+    // 0x04 = type ID (u32)
+    // 0x2A, 0x00, 0x00, 0x00 = value 42
+    // 0xFF = extra byte
+    let data = &[0x12, 0x0E, 0x00, 0x04, 0x2A, 0x00, 0x00, 0x00, 0xFF];
+
+    let result: ParseResult<SimpleEnum> = parse(Bytes::from(data.to_vec()));
+    assert_eq!(
+        result,
+        Err(ParseError::new(ParseErrorKind::ExtraData {
+            bytes_remaining: 1
+        }))
+    );
+}

@@ -19,11 +19,6 @@ pub enum ParseErrorKind {
     #[error("duplicate map key")]
     DuplicateMapKey,
 
-    #[error(
-        "enum variant value does not consume entire content length: expected {expected} bytes, got {actual}"
-    )]
-    EnumContentLengthMismatch { expected: u32, actual: u32 },
-
     #[error("type mismatch: expected {expected:?}, got {actual:?}")]
     TypeMismatch { expected: u8, actual: u8 },
 

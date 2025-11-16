@@ -6,7 +6,13 @@ use bytes::Bytes;
 /// Parse a value from Relish binary format.
 pub fn parse<T: Relish>(data: Bytes) -> ParseResult<T> {
     let mut data = BytesRef::new(&data);
-    let result = parse_tlv::<T>(&mut data)?;
+    parse_tlv::<T>(&mut data)
+}
+
+#[doc(hidden)]
+pub fn parse_tlv<T: Relish>(data: &mut BytesRef) -> ParseResult<T> {
+    let type_id = TypeId::read_for_type::<T>(data)?;
+    let result = parse_value_for_typeid(data, type_id)?;
 
     if !data.is_empty() {
         return Err(ParseError::new(ParseErrorKind::ExtraData {
@@ -15,12 +21,6 @@ pub fn parse<T: Relish>(data: Bytes) -> ParseResult<T> {
     }
 
     Ok(result)
-}
-
-#[doc(hidden)]
-pub fn parse_tlv<T: Relish>(data: &mut BytesRef) -> ParseResult<T> {
-    let type_id = TypeId::read_for_type::<T>(data)?;
-    parse_value_for_typeid(data, type_id)
 }
 
 pub(crate) fn parse_value_for_typeid<T: Relish>(

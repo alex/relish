@@ -300,14 +300,6 @@ fn impl_relish_enum(
                     ))
                 };
 
-                if !data.is_empty() {
-                    return Err(relish::ParseError::new(
-                        relish::ParseErrorKind::ExtraData {
-                            bytes_remaining: data.len()
-                        }
-                    ));
-                }
-
                 Ok(result)
             }
 
