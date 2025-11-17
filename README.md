@@ -38,7 +38,7 @@ For detailed format specifications, see [SPEC.md](SPEC.md).
 
 Relish supports backwards-compatible schema changes through field versioning:
 
-- **Adding fields**: New optional fields can always be safely added to a struct.
+- **Adding fields**: New optional fields can always be safely added to a struct. Parsers ignore unknown fields that they see.
 - **Remove fields**: A field can always be made optional to allow it to be omitted.
 
 ## Rust Implementation
