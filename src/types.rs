@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::hash::Hash;
+use std::hash::{BuildHasher, Hash};
 use std::mem;
 
 use crate::Relish;
@@ -284,14 +284,14 @@ impl<T: Relish> Relish for Vec<T> {
     }
 }
 
-impl<K: Relish + Eq + Hash, V: Relish> Relish for HashMap<K, V> {
+impl<K: Relish + Eq + Hash, V: Relish, S: BuildHasher + Default> Relish for HashMap<K, V, S> {
     const TYPE: TypeId = TypeId::Map;
 
     fn parse_value(data: &mut BytesRef) -> ParseResult<Self> {
         let key_type = TypeId::read_for_type::<K>(data)?;
         let value_type = TypeId::read_for_type::<V>(data)?;
 
-        let mut map = HashMap::new();
+        let mut map = HashMap::default();
         while !data.is_empty() {
             let key = parse_value_for_typeid::<K>(data, key_type)?;
             let value = parse_value_for_typeid::<V>(data, value_type)?;
