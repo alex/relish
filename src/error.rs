@@ -36,6 +36,10 @@ pub enum ParseErrorKind {
 
     #[error("unknown variant ID: {0}")]
     UnknownVariant(u8),
+
+    #[cfg(feature = "chrono")]
+    #[error("invalid timestamp value: {0} (cannot be converted to DateTime)")]
+    InvalidTimestamp(u64),
 }
 
 /// Error type returned when parsing Relish binary data fails.
@@ -69,6 +73,10 @@ pub enum WriteErrorKind {
 
     #[error("content length {0} exceeds maximum allowed (u32::MAX >> 1)")]
     ContentTooLarge(usize),
+
+    #[cfg(feature = "chrono")]
+    #[error("timestamp cannot be serialized as a unix timestamp")]
+    InvalidTimestamp,
 }
 
 /// Error type returned when serializing to Relish binary format fails.
