@@ -53,6 +53,7 @@ Varsize types use a tagged varint encoding for length prefixes:
 | Map | 0x10 | Varsize |
 | Struct | 0x11 | Varsize |
 | Enum | 0x12 | Varsize |
+| Timestamp | 0x13 | Fixed |
 
 ## Fixed-Size Types
 
@@ -70,6 +71,11 @@ Varsize types use a tagged varint encoding for length prefixes:
 ### Floating Point Types (f32, f64)
 - Little-endian encoded IEEE 754 bytes
 - Sizes: 4 or 8 bytes respectively
+
+### Timestamp
+- 8 bytes: little-endian encoded unsigned 64-bit Unix timestamp
+- Represents seconds since the Unix epoch (January 1, 1970, 00:00:00 UTC)
+- Does not include subsecond precision
 
 ## Varsize Types
 

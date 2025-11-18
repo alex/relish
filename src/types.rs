@@ -52,6 +52,7 @@ pub enum TypeId {
     Map = 0x10,
     Struct = 0x11,
     Enum = 0x12,
+    Timestamp = 0x13,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,6 +87,7 @@ impl TypeId {
             0x10 => Some(TypeId::Map),
             0x11 => Some(TypeId::Struct),
             0x12 => Some(TypeId::Enum),
+            0x13 => Some(TypeId::Timestamp),
             _ => None,
         }
     }
@@ -127,6 +129,7 @@ impl TypeId {
             TypeId::Map => TypeLength::Varsize,
             TypeId::Struct => TypeLength::Varsize,
             TypeId::Enum => TypeLength::Varsize,
+            TypeId::Timestamp => TypeLength::Fixed(8),
         }
     }
 }
@@ -211,6 +214,33 @@ impl Relish for Null {
 
     fn value_length(&self) -> usize {
         0
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl Relish for chrono::DateTime<chrono::Utc> {
+    const TYPE: TypeId = TypeId::Timestamp;
+
+    fn parse_value(data: &mut BytesRef) -> ParseResult<Self> {
+        const SIZE: usize = mem::size_of::<u64>();
+        let bytes: [u8; SIZE] = data.read(SIZE)?.as_ref().try_into().unwrap();
+        let timestamp = u64::from_le_bytes(bytes);
+        let timestamp_i64 = i64::try_from(timestamp)
+            .map_err(|_| ParseError::new(ParseErrorKind::InvalidTimestamp(timestamp)))?;
+        chrono::DateTime::from_timestamp(timestamp_i64, 0)
+            .ok_or_else(|| ParseError::new(ParseErrorKind::InvalidTimestamp(timestamp)))
+    }
+
+    fn write_value(&self, buffer: &mut Vec<u8>) -> crate::WriteResult<()> {
+        let timestamp = self.timestamp();
+        let timestamp_u64 = u64::try_from(timestamp)
+            .map_err(|_| crate::WriteError::new(crate::WriteErrorKind::InvalidTimestamp))?;
+        buffer.extend_from_slice(&timestamp_u64.to_le_bytes());
+        Ok(())
+    }
+
+    fn value_length(&self) -> usize {
+        mem::size_of::<u64>()
     }
 }
 
@@ -346,9 +376,10 @@ mod tests {
         assert_eq!(TypeId::from_byte(0x01), Some(TypeId::Bool));
         assert_eq!(TypeId::from_byte(0x0E), Some(TypeId::String));
         assert_eq!(TypeId::from_byte(0x12), Some(TypeId::Enum));
+        assert_eq!(TypeId::from_byte(0x13), Some(TypeId::Timestamp));
         assert_eq!(TypeId::from_byte(0x80), None);
         assert_eq!(TypeId::from_byte(0xFF), None);
-        assert_eq!(TypeId::from_byte(0x13), None);
+        assert_eq!(TypeId::from_byte(0x14), None);
     }
 
     #[test]
@@ -471,6 +502,49 @@ mod tests {
     #[test]
     fn test_floats() {
         assert_roundtrips(&[(Ok(std::f32::consts::PI), &[0x0Cu8, 0xdb, 0x0F, 0x49, 0x40])]);
+    }
+
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn test_chrono_timestamp() {
+        use chrono::DateTime;
+
+        assert_roundtrips(&[
+            (
+                // Test a known timestamp: 2009-02-13 23:31:30 UTC
+                Ok(DateTime::from_timestamp(1234567890, 0).unwrap()),
+                &[0x13u8, 0xD2, 0x02, 0x96, 0x49, 0x00, 0x00, 0x00, 0x00],
+            ),
+            (
+                // Test Unix epoch
+                Ok(DateTime::from_timestamp(0, 0).unwrap()),
+                &[0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            ),
+        ]);
+    }
+
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn test_chrono_timestamp_out_of_range() {
+        use chrono::DateTime;
+
+        // Test parsing a u64 value that exceeds i64::MAX
+        // This should fail because chrono can't represent timestamps > i64::MAX
+        let invalid_bytes = &[0x13u8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        let result = parse::<DateTime<chrono::Utc>>(Bytes::from(invalid_bytes.to_vec()));
+        assert_eq!(
+            result.unwrap_err().kind(),
+            &ParseErrorKind::InvalidTimestamp(u64::MAX)
+        );
+
+        // Test serializing a DateTime before Unix epoch (negative timestamp)
+        // This should fail because we can't represent negative timestamps as u64
+        let before_epoch = DateTime::from_timestamp(-1, 0).unwrap();
+        let result = to_vec(&before_epoch);
+        assert_eq!(
+            result.unwrap_err().kind(),
+            &crate::WriteErrorKind::InvalidTimestamp
+        );
     }
 
     #[test]
