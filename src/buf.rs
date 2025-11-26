@@ -24,6 +24,11 @@ impl<'a> BytesRef<'a> {
             data: result,
         })
     }
+
+    /// Returns the remaining data as a zero-copy `Bytes` slice.
+    pub(crate) fn to_bytes(&self) -> bytes::Bytes {
+        self.b.slice_ref(self.data)
+    }
 }
 
 impl std::ops::Deref for BytesRef<'_> {
