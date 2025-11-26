@@ -314,6 +314,33 @@ impl<T: Relish> Relish for Vec<T> {
     }
 }
 
+impl Relish for bytes::Bytes {
+    const TYPE: TypeId = TypeId::Array;
+
+    fn parse_value(data: &mut BytesRef) -> ParseResult<Self> {
+        TypeId::read_for_type::<u8>(data)?;
+
+        Ok(data.to_bytes())
+    }
+
+    fn write_value(&self, buffer: &mut Vec<u8>) -> crate::WriteResult<()> {
+        let content_len = 1 + self.len();
+
+        let prefix_len = tagged_varint_length_size(content_len);
+        buffer.reserve(prefix_len + content_len);
+        write_tagged_varint_length(buffer, content_len)?;
+        buffer.push(TypeId::U8 as u8);
+        buffer.extend_from_slice(self);
+
+        Ok(())
+    }
+
+    fn value_length(&self) -> usize {
+        let content_size = 1 + self.len();
+        tagged_varint_length_size(content_size) + content_size
+    }
+}
+
 impl<K: Relish + Eq + Hash, V: Relish, S: BuildHasher + Default> Relish for HashMap<K, V, S> {
     const TYPE: TypeId = TypeId::Map;
 
@@ -591,6 +618,29 @@ mod tests {
                 b'a', b'z',
             ],
         )]);
+    }
+
+    #[test]
+    fn test_bytes() {
+        assert_roundtrips(&[
+            (
+                Ok(Bytes::from(vec![1u8, 2, 3, 4])),
+                &[0x0Fu8, 0x0A, 0x02, 0x01, 0x02, 0x03, 0x04],
+            ),
+            (Ok(Bytes::from(vec![])), &[0x0F, 0x02, 0x02]),
+            (
+                Err(ParseError::new(ParseErrorKind::TypeMismatch {
+                    expected: 0x02,
+                    actual: 0x04,
+                })),
+                &[0x0Fu8, 0x0A, 0x04, 0x01, 0x00, 0x00, 0x00],
+            ),
+        ]);
+
+        // Verify roundtrip with Vec<u8> produces identical bytes
+        let bytes_data = Bytes::from(vec![0xDE, 0xAD, 0xBE, 0xEF]);
+        let vec_data: Vec<u8> = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        assert_eq!(to_vec(&bytes_data).unwrap(), to_vec(&vec_data).unwrap());
     }
 
     #[test]
