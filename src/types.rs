@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash};
 use std::mem;
+use std::sync::Arc;
 
 use crate::Relish;
 use crate::buf::BytesRef;
@@ -251,6 +252,31 @@ impl Relish for String {
         let result = String::from_utf8(data.as_ref().to_vec())
             .map_err(|_| ParseError::new(ParseErrorKind::InvalidUtf8))?;
         Ok(result)
+    }
+
+    fn write_value(&self, buffer: &mut Vec<u8>) -> crate::WriteResult<()> {
+        let bytes = self.as_bytes();
+        let len = bytes.len();
+        let prefix_len = tagged_varint_length_size(len);
+        buffer.reserve(prefix_len + len);
+        write_tagged_varint_length(buffer, len)?;
+        buffer.extend_from_slice(bytes);
+        Ok(())
+    }
+
+    fn value_length(&self) -> usize {
+        let len = self.len();
+        tagged_varint_length_size(len) + len
+    }
+}
+
+impl Relish for Arc<str> {
+    const TYPE: TypeId = TypeId::String;
+
+    fn parse_value(data: &mut BytesRef) -> ParseResult<Self> {
+        let s = std::str::from_utf8(data.as_ref())
+            .map_err(|_| ParseError::new(ParseErrorKind::InvalidUtf8))?;
+        Ok(Arc::from(s))
     }
 
     fn write_value(&self, buffer: &mut Vec<u8>) -> crate::WriteResult<()> {
@@ -589,6 +615,30 @@ mod tests {
                 &[0x0E, 0x08, 0xFF, 0xFE, 0xFD, 0xFC],
             ),
         ]);
+    }
+
+    #[test]
+    fn test_arc_str() {
+        use std::sync::Arc;
+
+        assert_roundtrips(&[
+            (
+                Ok(Arc::<str>::from("Hello, Relish!")),
+                &[
+                    0x0Eu8, 0x1C, b'H', b'e', b'l', b'l', b'o', b',', b' ', b'R', b'e', b'l', b'i',
+                    b's', b'h', b'!',
+                ],
+            ),
+            (
+                Err(ParseError::new(ParseErrorKind::InvalidUtf8)),
+                &[0x0E, 0x08, 0xFF, 0xFE, 0xFD, 0xFC],
+            ),
+        ]);
+
+        // Verify roundtrip with String produces identical bytes
+        let arc_str: Arc<str> = Arc::from("test string");
+        let string_data = "test string".to_string();
+        assert_eq!(to_vec(&arc_str).unwrap(), to_vec(&string_data).unwrap());
     }
 
     #[test]
