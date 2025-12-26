@@ -3,6 +3,8 @@ name = "relish_derive"
 version = "0.1.0"
 authors = ["Alex Gaynor <alex.gaynor@gmail.com>"]
 license = "BSD-3-Clause"
+homepage = "https://github.com/alex/relish"
+description = "Derive support for the relish crate"
 
 edition = "2024"
 rust-version = "1.91.0"
