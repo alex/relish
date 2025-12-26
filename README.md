@@ -4,7 +4,7 @@ Relish is a binary serialization format and Rust library, designed for efficienc
 
 ## Stability
 
-This project is in early development. The format specification has not been finalized and may change in backwards-incompatible ways.
+The Relish format specification is stable. All future changes will be backwards compatible.
 
 ## The Relish Format
 
