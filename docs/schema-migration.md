@@ -53,6 +53,4 @@ No action required. Field order in source code does not affect the wire format.
 
 ## Adding Enum Variants
 
-Unlike struct fields, unknown enum variants cause parse errors. Two options:
-
-Deploy all readers with the new variant before any writer sends it.
+Unlike struct fields, unknown enum variants cause parse errors. There, you must deploy all readers with the new variant before any writer sends it.
