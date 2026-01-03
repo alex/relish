@@ -20,4 +20,4 @@ default = []
 chrono = ["dep:chrono"]
 
 [workspace]
-members = ["relish_derive"]
+members = ["relish_derive", "relish_ascii"]
