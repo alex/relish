@@ -63,7 +63,8 @@ pub(crate) enum TypeLength {
 }
 
 impl TypeId {
-    pub(crate) fn from_byte(byte: u8) -> Option<Self> {
+    #[doc(hidden)]
+    pub fn from_byte(byte: u8) -> Option<Self> {
         if byte & 0x80 != 0 {
             return None;
         }

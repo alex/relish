@@ -39,7 +39,7 @@ pub use crate::write::to_vec;
 pub use crate::parse::StructParser;
 
 #[doc(hidden)]
-pub use crate::parse::{parse_tlv, read_byte};
+pub use crate::parse::{parse_tlv, read_byte, read_value_for_typeid};
 
 #[doc(hidden)]
 pub use crate::types::{tagged_varint_length_size, write_tagged_varint_length};

@@ -6,11 +6,13 @@ pub struct BytesRef<'a> {
 }
 
 impl<'a> BytesRef<'a> {
-    pub(crate) fn new(b: &'a bytes::Bytes) -> Self {
+    #[doc(hidden)]
+    pub fn new(b: &'a bytes::Bytes) -> Self {
         BytesRef { b, data: b }
     }
 
-    pub(crate) fn read(&mut self, amt: usize) -> ParseResult<Self> {
+    #[doc(hidden)]
+    pub fn read(&mut self, amt: usize) -> ParseResult<Self> {
         if amt > self.len() {
             return Err(ParseError::new(crate::ParseErrorKind::InsufficientData {
                 needed: amt,

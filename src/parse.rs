@@ -31,7 +31,8 @@ pub(crate) fn parse_value_for_typeid<T: Relish>(
     T::parse_value(&mut value_data)
 }
 
-fn read_value_for_typeid<'a>(
+#[doc(hidden)]
+pub fn read_value_for_typeid<'a>(
     data: &mut BytesRef<'a>,
     type_id: TypeId,
 ) -> ParseResult<BytesRef<'a>> {
