@@ -14,10 +14,12 @@ bytes = "1.11.0"
 thiserror = "2.0.17"
 relish_derive = { version = "0.1.0", path = "relish_derive" }
 chrono = { version = "0.4", optional = true, default-features = false, features = ["std"] }
+smallvec = { version = "1.15.1", optional = true }
 
 [features]
 default = []
 chrono = ["dep:chrono"]
+smallvec = ["dep:smallvec"]
 
 [workspace]
 members = ["relish_derive", "relish_ascii"]
