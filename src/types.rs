@@ -366,6 +366,51 @@ impl<T: Relish> Relish for Vec<T> {
     }
 }
 
+impl<T: Relish> Relish for Box<[T]> {
+    const TYPE: TypeId = TypeId::Array;
+
+    fn parse_value(data: &mut BytesRef) -> ParseResult<Self> {
+        let elem_type = TypeId::read_for_type::<T>(data)?;
+
+        let mut elements = Vec::new();
+        if let TypeLength::Fixed(size) = elem_type.length() {
+            elements.reserve(data.len() / size);
+        }
+
+        while !data.is_empty() {
+            elements.push(parse_value_for_typeid::<T>(data, elem_type)?);
+        }
+
+        Ok(elements.into_boxed_slice())
+    }
+
+    fn write_value(&self, buffer: &mut Vec<u8>) -> crate::WriteResult<()> {
+        let mut content_len = 1;
+        for elem in self {
+            content_len += elem.value_length();
+        }
+
+        let prefix_len = tagged_varint_length_size(content_len);
+        buffer.reserve(prefix_len + content_len);
+        write_tagged_varint_length(buffer, content_len)?;
+        buffer.push(T::TYPE as u8);
+
+        for elem in self {
+            elem.write_value(buffer)?;
+        }
+
+        Ok(())
+    }
+
+    fn value_length(&self) -> usize {
+        let mut content_size = 1;
+        for elem in self {
+            content_size += elem.value_length();
+        }
+        tagged_varint_length_size(content_size) + content_size
+    }
+}
+
 #[cfg(feature = "smallvec")]
 impl<A: smallvec::Array> Relish for smallvec::SmallVec<A>
 where
@@ -760,6 +805,31 @@ mod tests {
                 "bar".to_string(),
                 "baz".to_string(),
             ]),
+            &[
+                0x0Fu8, 0x1A, 0x0E, 0x06, b'f', b'o', b'o', 0x06, b'b', b'a', b'r', 0x06, b'b',
+                b'a', b'z',
+            ],
+        )]);
+    }
+
+    #[test]
+    fn test_box_slice() {
+        assert_roundtrips(&[
+            (
+                Ok(vec![1u32, 2, 3, 4].into_boxed_slice()),
+                &[
+                    0x0Fu8, 0x22, 0x04, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x00,
+                    0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+                ],
+            ),
+            (Ok(vec![].into_boxed_slice()), &[0x0F, 0x02, 0x04]),
+        ]);
+    }
+
+    #[test]
+    fn test_box_slice_string() {
+        assert_roundtrips(&[(
+            Ok(vec!["foo".to_string(), "bar".to_string(), "baz".to_string()].into_boxed_slice()),
             &[
                 0x0Fu8, 0x1A, 0x0E, 0x06, b'f', b'o', b'o', 0x06, b'b', b'a', b'r', 0x06, b'b',
                 b'a', b'z',
