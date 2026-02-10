@@ -341,6 +341,55 @@ impl<T: Relish> Relish for Vec<T> {
     }
 }
 
+#[cfg(feature = "smallvec")]
+impl<A: smallvec::Array> Relish for smallvec::SmallVec<A>
+where
+    A::Item: Relish,
+{
+    const TYPE: TypeId = TypeId::Array;
+
+    fn parse_value(data: &mut BytesRef) -> crate::ParseResult<Self> {
+        let elem_type = TypeId::read_for_type::<A::Item>(data)?;
+
+        let mut elements = smallvec::SmallVec::<A>::new();
+        if let TypeLength::Fixed(size) = elem_type.length() {
+            elements.reserve(data.len() / size);
+        }
+
+        while !data.is_empty() {
+            elements.push(parse_value_for_typeid::<A::Item>(data, elem_type)?);
+        }
+
+        Ok(elements)
+    }
+
+    fn write_value(&self, buffer: &mut Vec<u8>) -> crate::WriteResult<()> {
+        let mut content_len = 1;
+        for elem in self {
+            content_len += elem.value_length();
+        }
+
+        let prefix_len = tagged_varint_length_size(content_len);
+        buffer.reserve(prefix_len + content_len);
+        write_tagged_varint_length(buffer, content_len)?;
+        buffer.push(A::Item::TYPE as u8);
+
+        for elem in self {
+            elem.write_value(buffer)?;
+        }
+
+        Ok(())
+    }
+
+    fn value_length(&self) -> usize {
+        let mut content_size = 1;
+        for elem in self {
+            content_size += elem.value_length();
+        }
+        tagged_varint_length_size(content_size) + content_size
+    }
+}
+
 impl Relish for bytes::Bytes {
     const TYPE: TypeId = TypeId::Array;
 
@@ -669,6 +718,49 @@ mod tests {
                 b'a', b'z',
             ],
         )]);
+    }
+
+    #[cfg(feature = "smallvec")]
+    #[test]
+    fn test_smallvec() {
+        assert_roundtrips(&[
+            (
+                Ok(smallvec::SmallVec::from_buf([1u32, 2, 3, 4])),
+                &[
+                    0x0Fu8, 0x22, 0x04, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x00,
+                    0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+                ],
+            ),
+            (Ok(smallvec::smallvec![]), &[0x0F, 0x02, 0x04]),
+        ]);
+    }
+
+    #[cfg(feature = "smallvec")]
+    #[test]
+    fn test_smallvec_string() {
+        assert_roundtrips(&[(
+            Ok(smallvec::SmallVec::from_buf([
+                "foo".to_string(),
+                "bar".to_string(),
+                "baz".to_string(),
+            ])),
+            &[
+                0x0Fu8, 0x1A, 0x0E, 0x06, b'f', b'o', b'o', 0x06, b'b', b'a', b'r', 0x06, b'b',
+                b'a', b'z',
+            ],
+        )]);
+    }
+
+    #[cfg(feature = "smallvec")]
+    #[test]
+    fn test_smallvec_spilled() {
+        let data = vec![0_u64, 1, 2, 3, 4, 5, 6, 7];
+
+        let parse_result =
+            parse::<smallvec::SmallVec<[u64; 4]>>(to_vec(&data).unwrap().into()).unwrap();
+
+        assert_eq!(parse_result.as_slice(), data.as_slice());
+        assert!(parse_result.spilled())
     }
 
     #[test]
