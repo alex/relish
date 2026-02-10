@@ -296,6 +296,31 @@ impl Relish for Arc<str> {
     }
 }
 
+impl Relish for Box<str> {
+    const TYPE: TypeId = TypeId::String;
+
+    fn parse_value(data: &mut BytesRef) -> ParseResult<Self> {
+        let s = std::str::from_utf8(data.as_ref())
+            .map_err(|_| ParseError::new(ParseErrorKind::InvalidUtf8))?;
+        Ok(Box::from(s))
+    }
+
+    fn write_value(&self, buffer: &mut Vec<u8>) -> crate::WriteResult<()> {
+        let bytes = self.as_bytes();
+        let len = bytes.len();
+        let prefix_len = tagged_varint_length_size(len);
+        buffer.reserve(prefix_len + len);
+        write_tagged_varint_length(buffer, len)?;
+        buffer.extend_from_slice(bytes);
+        Ok(())
+    }
+
+    fn value_length(&self) -> usize {
+        let len = self.len();
+        tagged_varint_length_size(len) + len
+    }
+}
+
 impl<T: Relish> Relish for Vec<T> {
     const TYPE: TypeId = TypeId::Array;
 
@@ -312,6 +337,51 @@ impl<T: Relish> Relish for Vec<T> {
         }
 
         Ok(elements)
+    }
+
+    fn write_value(&self, buffer: &mut Vec<u8>) -> crate::WriteResult<()> {
+        let mut content_len = 1;
+        for elem in self {
+            content_len += elem.value_length();
+        }
+
+        let prefix_len = tagged_varint_length_size(content_len);
+        buffer.reserve(prefix_len + content_len);
+        write_tagged_varint_length(buffer, content_len)?;
+        buffer.push(T::TYPE as u8);
+
+        for elem in self {
+            elem.write_value(buffer)?;
+        }
+
+        Ok(())
+    }
+
+    fn value_length(&self) -> usize {
+        let mut content_size = 1;
+        for elem in self {
+            content_size += elem.value_length();
+        }
+        tagged_varint_length_size(content_size) + content_size
+    }
+}
+
+impl<T: Relish> Relish for Box<[T]> {
+    const TYPE: TypeId = TypeId::Array;
+
+    fn parse_value(data: &mut BytesRef) -> ParseResult<Self> {
+        let elem_type = TypeId::read_for_type::<T>(data)?;
+
+        let mut elements = Vec::new();
+        if let TypeLength::Fixed(size) = elem_type.length() {
+            elements.reserve(data.len() / size);
+        }
+
+        while !data.is_empty() {
+            elements.push(parse_value_for_typeid::<T>(data, elem_type)?);
+        }
+
+        Ok(elements.into_boxed_slice())
     }
 
     fn write_value(&self, buffer: &mut Vec<u8>) -> crate::WriteResult<()> {
@@ -692,6 +762,28 @@ mod tests {
     }
 
     #[test]
+    fn test_box_str() {
+        assert_roundtrips(&[
+            (
+                Ok(Box::<str>::from("Hello, Relish!")),
+                &[
+                    0x0Eu8, 0x1C, b'H', b'e', b'l', b'l', b'o', b',', b' ', b'R', b'e', b'l', b'i',
+                    b's', b'h', b'!',
+                ],
+            ),
+            (
+                Err(ParseError::new(ParseErrorKind::InvalidUtf8)),
+                &[0x0E, 0x08, 0xFF, 0xFE, 0xFD, 0xFC],
+            ),
+        ]);
+
+        // Verify roundtrip with String produces identical bytes
+        let box_str: Box<str> = Box::from("test string");
+        let string_data = "test string".to_string();
+        assert_eq!(to_vec(&box_str).unwrap(), to_vec(&string_data).unwrap());
+    }
+
+    #[test]
     fn test_vec() {
         assert_roundtrips(&[
             (
@@ -713,6 +805,31 @@ mod tests {
                 "bar".to_string(),
                 "baz".to_string(),
             ]),
+            &[
+                0x0Fu8, 0x1A, 0x0E, 0x06, b'f', b'o', b'o', 0x06, b'b', b'a', b'r', 0x06, b'b',
+                b'a', b'z',
+            ],
+        )]);
+    }
+
+    #[test]
+    fn test_box_slice() {
+        assert_roundtrips(&[
+            (
+                Ok(vec![1u32, 2, 3, 4].into_boxed_slice()),
+                &[
+                    0x0Fu8, 0x22, 0x04, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x00,
+                    0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+                ],
+            ),
+            (Ok(vec![].into_boxed_slice()), &[0x0F, 0x02, 0x04]),
+        ]);
+    }
+
+    #[test]
+    fn test_box_slice_string() {
+        assert_roundtrips(&[(
+            Ok(vec!["foo".to_string(), "bar".to_string(), "baz".to_string()].into_boxed_slice()),
             &[
                 0x0Fu8, 0x1A, 0x0E, 0x06, b'f', b'o', b'o', 0x06, b'b', b'a', b'r', 0x06, b'b',
                 b'a', b'z',
